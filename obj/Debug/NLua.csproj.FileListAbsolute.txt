@@ -1,0 +1,7 @@
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/bin/Debug/NLua.dll
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/bin/Debug/NLua.pdb
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/bin/Debug/UnityEngine.dll
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/obj/Debug/NLua.csprojResolveAssemblyReference.cache
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/obj/Debug/NLua.csproj.CoreCompileInputs.cache
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/obj/Debug/NLua.dll
+/home/zatherz/Projects/ModTheGungeon/ETGMod.Reloaded/NLua/obj/Debug/NLua.pdb
