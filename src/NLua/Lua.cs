@@ -853,12 +853,6 @@ end
 			if (!LuaLib.LuaCheckStack (luaState, args.Length + 6))
 				throw new LuaException ("Lua stack overflow");
 
-            // FIXME inspect segfault
-            // a LuaGettop call in here
-            // I suspect it's the one right below the pushstdcallcfunction
-            // maybe it's corrupting everything because the function gets popped later on?
-            // (some shit with it being the same instance or w/e?)
-
             LuaLib.LuaPushStdCallCFunction(luaState, DoTraceback);
 
             int funcTop = LuaLib.LuaGetTop(luaState);
