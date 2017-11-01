@@ -52,6 +52,11 @@ namespace NLua
 			return LuaCore.LuaGC (luaState, (int)what, data);
 		}
 
+        public static void LuaLTraceback(LuaState targetLuaState, LuaState sourceLuaState, string message, int level) {
+            LuaCore.LuaLTraceback(targetLuaState, sourceLuaState, message, level);
+        }
+
+
 		public static string LuaTypeName (LuaState luaState, LuaTypes type)
 		{
 			return LuaCore.LuaTypeName (luaState, (int)type).ToString ();

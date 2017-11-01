@@ -13,6 +13,10 @@ namespace KeraLua
 			return NativeMethods.LuaGC (luaState, what, data);
 		}
 
+        public static void LuaLTraceback(IntPtr targetLuaState, IntPtr sourceLuaState, string message, int level) {
+            NativeMethods.LuaLTraceback(targetLuaState, sourceLuaState, message, level);
+        }
+
 		public static CharPtr LuaTypeName (IntPtr luaState, int type)
 		{
 			return NativeMethods.LuaTypeName (luaState, type);

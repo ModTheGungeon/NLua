@@ -43,6 +43,8 @@ namespace NLua.Exceptions
 
 		private readonly string source;
 
+        public string[] Traceback;
+
 		/// <summary>
 		/// The position in the script where the exception was triggered.
 		/// </summary>
@@ -57,9 +59,10 @@ namespace NLua.Exceptions
 		/// </summary>
 		/// <param name="message">The message that describes the error.</param>
 		/// <param name="source">The position in the script where the exception was triggered.</param>
-		public LuaScriptException (string message, string source) : base(message)
+		public LuaScriptException (string message, string source, string[] traceback = null) : base(message)
 		{
 			this.source = source;
+            this.Traceback = traceback;
 		}
 
 		/// <summary>
@@ -67,11 +70,12 @@ namespace NLua.Exceptions
 		/// </summary>
 		/// <param name="innerException">The .NET exception triggered by user-code.</param>
 		/// <param name="source">The position in the script where the exception was triggered.</param>
-		public LuaScriptException (Exception innerException, string source)
+		public LuaScriptException (Exception innerException, string source, string[] traceback = null)
 			: base("A .NET exception occured in user-code", innerException)
 		{
 			this.source = source;
 			this.IsNetException = true;
+            this.Traceback = traceback;
 		}
 
 		public override string ToString ()

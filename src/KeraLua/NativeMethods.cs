@@ -31,6 +31,9 @@ namespace KeraLua
 		[DllImport (LIBNAME, CallingConvention = CallingConvention.Cdecl, EntryPoint = "lua_gc")]
 		internal static extern int LuaGC (IntPtr luaState, int what, int data);
 
+        [DllImport(LIBNAME, CallingConvention = CallingConvention.Cdecl, EntryPoint = "luaL_traceback")]
+        internal static extern void LuaLTraceback(IntPtr targetLuaState, IntPtr sourceLuaState, string message, int level);
+
 		[DllImport (LIBNAME, CallingConvention = CallingConvention.Cdecl, EntryPoint = "lua_typename")]
 		internal static extern IntPtr LuaTypeName (IntPtr luaState, int type);
 
@@ -153,7 +156,6 @@ namespace KeraLua
 
 		[DllImport (LIBNAME, CallingConvention = CallingConvention.Cdecl, EntryPoint = "lua_pushboolean")]
 		internal static extern void LuaPushBoolean (IntPtr luaState, int value);
-
 
 		[DllImport (LIBNAME, CallingConvention = CallingConvention.Cdecl, EntryPoint = "lua_tolstring")]
 		internal static extern IntPtr LuaToLString (IntPtr luaState, int index, out uint strLen);

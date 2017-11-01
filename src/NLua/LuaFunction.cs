@@ -57,6 +57,15 @@ namespace NLua
 			_Interpreter = interpreter;
 		}
 
+        public object Environment {
+            get {
+                return _Interpreter.GetFunctionEnv(this);
+            }
+            set {
+                _Interpreter.SetFunctionEnv(this, value);
+            }
+        }
+
 		/*
 		 * Calls the function casting return values to the types
 		 * in returnTypes

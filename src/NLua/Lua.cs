@@ -42,21 +42,22 @@ using NLua.Extensions;
 
 namespace NLua
 {
-	#if USE_KOPILUA
+#if USE_KOPILUA
 	using LuaCore  = KopiLua.Lua;
 	using LuaState = KopiLua.LuaState;
 	using LuaHook  = KopiLua.LuaHook;
 	using LuaDebug = KopiLua.LuaDebug;
 	using LuaNativeFunction = KopiLua.LuaNativeFunction;
-	#else
-	using LuaCore  = KeraLua.Lua;
-	using LuaState = KeraLua.LuaState;
-	using LuaHook  = KeraLua.LuaHook;
-	using LuaDebug = KeraLua.LuaDebug;
-	using LuaNativeFunction = KeraLua.LuaNativeFunction;
-	#endif
+#else
+    using LuaCore = KeraLua.Lua;
+    using LuaState = KeraLua.LuaState;
+    using LuaHook = KeraLua.LuaHook;
+    using LuaDebug = KeraLua.LuaDebug;
+    using LuaNativeFunction = KeraLua.LuaNativeFunction;
+    using System.Text;
+#endif
 
-	/*
+    /*
 	 * Main class of NLua
 	 * Object-oriented wrapper to Lua API
 	 *
@@ -67,7 +68,7 @@ namespace NLua
 	 * - removed all Open*Lib() functions 
 	 * - all libs automatically open in the Lua class constructor (just assign nil to unwanted libs)
 	 * */
-	[CLSCompliant(true)]
+    [CLSCompliant(true)]
 	public class Lua : IDisposable
 	{
 		#region lua debug functions
@@ -351,18 +352,34 @@ end
 		{
 			object err = translator.GetObject (luaState, -1);
 			LuaLib.LuaSetTop (luaState, oldTop);
+            Console.WriteLine($"LUAEX!!! [{err.GetType()}]");
+            
 
 			// A pre-wrapped exception - just rethrow it (stack trace of InnerException will be preserved)
 			var luaEx = err as LuaScriptException;
 
-			if (luaEx != null)
-				throw luaEx;
+            if (luaEx != null) {
+                throw luaEx;
+            }
 
 			// A non-wrapped Lua error (best interpreted as a string) - wrap it and throw it
 			if (err == null)
 				err = "Unknown Lua Error";
 
-			throw new LuaScriptException (err.ToString (), string.Empty);
+            string[] traceback = null;
+            string msg = null;
+
+            if (err is LuaTable) {
+                var errtab = (LuaTable)err;
+                if ((bool)errtab["__etgmod_error"]) {
+                    msg = (string)errtab["msg"];
+
+                    var luatraceback = (string)errtab["traceback"];
+                    traceback = luatraceback.Substring(luatraceback.IndexOf('\n') + 1).Replace("\t", "").Split('\n');
+                }
+            }
+
+			throw new LuaScriptException (msg ?? err.ToString (), string.Empty, traceback);
 		}
 
 		/// <summary>
@@ -444,6 +461,44 @@ end
 			translator.PopValues (luaState, oldTop);
 			return result;
 		}
+
+        /// <summary>
+        /// Sets the _ENV upvalue of a function
+        /// </summary>
+        /// <param name="func">Target function</param>
+        /// <param name="env">Environment table to set _ENV to</param>
+        /// <returns></returns>
+        internal void SetFunctionEnv(object func, object env) {
+            int nArgs = 0;
+            int oldTop = LuaLib.LuaGetTop(luaState);
+
+            translator.Push(luaState, func);
+            translator.Push(luaState, env);
+
+            //                      func index  upvalue (_ENV = 1)
+            //                               V  V
+            LuaCore.LuaSetUpValue(luaState, -2, 1);
+
+            translator.PopValues(luaState, oldTop);
+        }
+
+        /// <summary>
+        /// Gets the _ENV upvalue of a function
+        /// </summary>
+        /// <param name="func">Target function</param>
+        /// <returns></returns>
+        internal object GetFunctionEnv(object func) {
+            int nArgs = 0;
+            int oldTop = LuaLib.LuaGetTop(luaState);
+
+            translator.Push(luaState, func);
+
+            //                      func index  upvalue (_ENV = 1)
+            //                               V  V
+            LuaCore.LuaGetUpValue(luaState, -1, 1);
+
+            return translator.PopValues(luaState, oldTop);
+        }
 
 		/// <summary>
 		/// Executes a Lua chunk and returns all the chunk's return values in an array.
@@ -757,6 +812,34 @@ end
 			return CallFunction (function, args, null);
 		}
 
+        internal int DoTraceback(LuaState state) {
+            // if err is not a string, just pass it on (the stack is local to the function)
+            // I spent a solid hour of debugging non stop only to fix the issue with this one line
+            // (the issue was that nlua would throw exception objects and this thing would inappropriately
+            // stringify them btw, if you're interested)
+            if (!LuaLib.LuaIsString(state, -1)) return LuaLib.LuaGetTop(state);
+
+            var error = LuaLib.LuaToString(state, -1);
+
+            LuaLib.LuaPop(state, 1);
+
+            LuaLib.LuaNewTable(state); // t
+
+            LuaLib.LuaPushString(state, "__etgmod_error");
+            LuaLib.LuaPushBoolean(state, true);
+            LuaLib.LuaSetTable(state, -3);
+
+            LuaLib.LuaPushString(state, "msg"); // k
+            LuaLib.LuaPushString(state, error); // v
+            LuaLib.LuaSetTable(state, -3); // t[k] = v
+
+            LuaLib.LuaPushString(state, "traceback"); // k
+            LuaLib.LuaLTraceback(state, state, null, 0); // v
+            LuaLib.LuaSetTable(state, -3); // t[k] = v
+
+            return 1; // t is left
+        }
+
 		/*
 			* Calls the object as a function with the provided arguments and
 			* casting returned values to the types in returnTypes before returning
@@ -770,26 +853,43 @@ end
 			if (!LuaLib.LuaCheckStack (luaState, args.Length + 6))
 				throw new LuaException ("Lua stack overflow");
 
+            // FIXME inspect segfault
+            // a LuaGettop call in here
+            // I suspect it's the one right below the pushstdcallcfunction
+            // maybe it's corrupting everything because the function gets popped later on?
+            // (some shit with it being the same instance or w/e?)
+
+            LuaLib.LuaPushStdCallCFunction(luaState, DoTraceback);
+
+            int funcTop = LuaLib.LuaGetTop(luaState);
+            var debug_traceback_index = -1;
+
 			translator.Push (luaState, function);
+            debug_traceback_index -= 1;
 
 			if (args != null) {
 				nArgs = args.Length;
 
-				for (int i = 0; i < args.Length; i++) 
-					translator.Push (luaState, args [i]);
+                for (int i = 0; i < args.Length; i++) {
+                    translator.Push(luaState, args[i]);
+                    debug_traceback_index -= 1;
+                }
 			}
 
 			executing = true;
 
 			try {
-				int error = LuaLib.LuaPCall (luaState, nArgs, -1, 0);
-				if (error != 0)
-					ThrowExceptionFromError (oldTop);
+				int error = LuaLib.LuaPCall (luaState, nArgs, -1, debug_traceback_index);
+                if (error != 0) {
+                    ThrowExceptionFromError(oldTop);
+                }
 			} finally {
 				executing = false;
 			}
 
-			return returnTypes != null ? translator.PopValues (luaState, oldTop, returnTypes) : translator.PopValues (luaState, oldTop);
+			object[] values = returnTypes != null ? translator.PopValues (luaState, funcTop, returnTypes) : translator.PopValues (luaState, funcTop);
+            translator.PopValues(luaState, oldTop);
+            return values;
 		}
 
 		/*
@@ -838,6 +938,31 @@ end
 
 			LuaLib.LuaSetTop (luaState, oldTop);
 		}
+
+        /*
+         * Creates a new table
+         */
+        public LuaTable NewTable()
+        {
+            int oldTop = LuaLib.LuaGetTop(luaState);
+            LuaLib.LuaNewTable(luaState);
+            var table = (LuaTable)Pop();
+            LuaLib.LuaSetTop(luaState, oldTop);
+            return table;
+        }
+
+        /*
+         * Creates a Lua function out of a native function
+         */
+        public LuaFunction NewFunction(KeraLua.LuaNativeFunction nativefunc) {
+            int oldTop = LuaLib.LuaGetTop(luaState);
+
+            translator.Push(luaState, nativefunc);
+            var func = translator.GetFunction(luaState, -1);
+
+            LuaLib.LuaSetTop(luaState, oldTop);
+            return func;
+        }
 
 		public Dictionary<object, object> GetTableDict (LuaTable table)
 		{
@@ -936,6 +1061,24 @@ end
 		{
 			return LuaCore.LuaGetInfo (luaState, what, ref ar);
 		}
+
+        /// <summary>
+        /// Gets a global (see lua docs)
+        /// </summary>
+        /// <param name = "name">see lua docs</param>
+        /// <returns>see lua docs</returns>
+        public void GetGlobal(string name) {
+            LuaCore.LuaNetGetGlobal(luaState, name);
+        }
+
+        /// <summary>
+        /// Sets a global (see lua docs)
+        /// </summary>
+        /// <param name = "name">see lua docs</param>
+        /// <returns>see lua docs</returns>
+        public void SetGlobal(string name) {
+            LuaCore.LuaNetSetGlobal(luaState, name);
+        }
 
 		/// <summary>
 		/// Gets up value (see lua docs)
